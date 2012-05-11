@@ -7,7 +7,7 @@ $english = array(
 	'suggested_friends:new:people' => 'Suggested Friends',
 
 	'suggested_friends:people:you:may:know' => 'Suggested Friends',
-	'suggested_friends:widget:description' => 'This widget suggest you people you may know',
+	'suggested_friends:widget:description' => 'This widget suggests people you may know',
 	'suggested_friends:see:more' => 'See more',
 	'suggested_friends:how:many' => 'How many people?',
 
