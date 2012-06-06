@@ -20,7 +20,7 @@ function suggested_friends_init() {
 
 	elgg_extend_view('css/elgg', 'suggested_friends/css');
 
-	register_page_handler('suggested_friends', 'suggested_friends_page_handler');
+	elgg_register_page_handler('suggested_friends', 'suggested_friends_page_handler');
 
 	elgg_register_widget_type('suggested_friends', elgg_echo('suggested_friends:people:you:may:know'), elgg_echo('suggested_friends:widget:description'), 'dashboard,profile');
 }

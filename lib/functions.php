@@ -37,9 +37,11 @@ function suggested_friends_get_people($guid, $friends_of_friends_limit = 3, $gro
     
 	// generate a guids array
 	$in = array($guid);
-	foreach ($friends as $friend) {
-		$in[] = $friend->guid;
-	}
+  if(is_array($friends) && count($friends) > 0){
+    foreach ($friends as $friend) {
+      $in[] = $friend->guid;
+    }
+  }
 
 	$in = implode(',', $in);
 
