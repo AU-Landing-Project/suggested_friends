@@ -1,9 +1,12 @@
 <?php
 
+namespace AU\SuggestedFriends;
+
 /*
  * People usort callback
  */
-function suggested_friends_sorter($a, $b){
+
+function suggested_friends_sorter($a, $b) {
 	if ($a['priority'] == $b['priority']) {
 		return 0;
 	}
@@ -18,126 +21,95 @@ function suggested_friends_sorter($a, $b){
  * @param Int $groups_limit
  * @return Array
  */
-function suggested_friends_get_people($guid, $friends_of_friends_limit = 3, $groups_members_limit = 3) {
+function get_suggestions($guid, $friends_of_friends_limit = 10, $groups_members_limit = 10) {
 
-	global $CONFIG;
+	$dbprefix = elgg_get_config('dbprefix');
 
-	// retrieve all users friends
-	$options = array(
-		'type' => 'user',
-		'relationship' => 'friend',
-		'relationship_guid' => $guid,
-		'wheres' => "u.banned = 'no'",
-		'joins' => "INNER JOIN {$CONFIG->dbprefix}users_entity u USING (guid)",
-		'order_by' => 'u.last_action DESC',
-	    'limit' => 0,
-	);
-	
-	$friends = elgg_get_entities_from_relationship($options);
-    
-	// generate a guids array
-	$in = array($guid);
-  if(is_array($friends) && count($friends) > 0){
-    foreach ($friends as $friend) {
-      $in[] = $friend->guid;
-    }
-  }
+	$guid = sanitize_int($guid);
+	$suggestions = array();
 
-	$in = implode(',', $in);
+	if ($friends_of_friends_limit) {
+		// get some friends of friends
+		$options = array(
+			'selects' => array(
+				'COUNT(fof.guid_two) as priority'
+			),
+			'type' => 'user',
+			'joins' => array(
+				"JOIN {$dbprefix}users_entity ue ON ue.guid = e.guid",
+				"JOIN {$dbprefix}entity_relationships fr ON fr.guid_one = {$guid} AND fr.relationship = 'friend'",
+				"JOIN {$dbprefix}entity_relationships fof ON fof.guid_one = fr.guid_two AND fof.relationship = 'friend'"
+			),
+			"wheres" => array(
+				"ue.banned = 'no'",
+				"e.guid NOT IN (SELECT f.guid_two FROM {$dbprefix}entity_relationships f WHERE f.guid_one = {$guid} AND f.relationship = 'friend')",
+				"fof.guid_two = e.guid",
+				"e.guid != {$guid}"
+			),
+			'group_by' => 'e.guid',
+			'order_by' => 'priority desc, ue.last_action desc',
+			'limit' => abs((int) $friends_of_friends_limit)
+		);
 
-	$people = array();
+		$fof = elgg_get_entities($options);
 
-	/* seach by friends */
-	if ($friends_of_friends_limit > 0) {
-		foreach ($friends as $friend) {
-			// retrieve friends of each friend (discarding the users friends)
-			$fof = elgg_get_entities_from_relationship(array(
-				'type' => 'user',
-				'relationship' => 'friend',
-				'relationship_guid' => $friend->guid,
-				'wheres' => array(
-					"e.guid NOT IN ($in)",
-					"u.banned = 'no'"
-				),
-				'joins' => "INNER JOIN {$CONFIG->dbprefix}users_entity u USING (guid)",
-				'order_by' => 'u.last_action DESC',
-				'limit' => $friends_of_friends_limit
-			));
-			if (is_array($fof) && count($fof) > 0) {
-				// populate $people
-				foreach ($fof as $f) {
-					if (isset($people[$f->guid])) {
-						// if the current person is present in $people, increase the priority and attach the common friend entity
-						$people[$f->guid]['mutuals'][] = $friend;
-						++$people[$f->guid]['priority'];
-					} else {
-						$people[$f->guid] = array(
-							'entity' => $f,
-							'mutuals' => array($friend),
-							'groups' => array(),
-							'priority' => 0
-						);
-					}
-				}
-			}
+		foreach ($fof as $f) {
+			$priority = (int) $f->getVolatileData('select:priority');
+			$suggestions[$f->guid] = array(
+				'entity' => $f,
+				'mutuals' => $priority,
+				'groups' => 0,
+				'priority' => $priority
+			);
 		}
 	}
-	unset($friends);
 
-	/* search by groups */
-	if ($groups_members_limit > 0) {
-		// retrieve ($groups_limit) user's groups
+	if ($groups_members_limit) {
+		// get some mutual group members
 		$options = array(
-			'type' => 'group',
-			'relationship' => 'member',
-			'relationship_guid' => $guid,
-			'order_by' => 'time_created DESC',
-			'limit' => 0
+			'selects' => array(
+				'COUNT(mog.guid_two) as priority'
+			),
+			'type' => 'user',
+			'joins' => array(
+				"JOIN {$dbprefix}users_entity ue ON ue.guid = e.guid",
+				"JOIN {$dbprefix}entity_relationships g ON g.guid_one = {$guid} AND g.relationship = 'member'",
+				"JOIN {$dbprefix}groups_entity ge ON ge.guid = g.guid_two", //ensure it's a group
+				"JOIN {$dbprefix}entity_relationships mog ON mog.guid_two = g.guid_two AND mog.relationship = 'member'"
+			),
+			"wheres" => array(
+				"ue.banned = 'no'",
+				"e.guid NOT IN (SELECT f.guid_two FROM {$dbprefix}entity_relationships f WHERE f.guid_one = {$guid} AND f.relationship = 'friend')",
+				"mog.guid_one = e.guid",
+				"e.guid != {$guid}"
+			),
+			'group_by' => 'e.guid',
+			'order_by' => 'priority desc, ue.last_action desc',
+			'limit' => 3 //abs((int) $groups_members_limit)
 		);
-		
-		$groups = elgg_get_entities_from_relationship($options);
 
-		if (is_array($groups) && count($groups) > 0) {
-			foreach ($groups as $group) {
-				// retrieve 3 members of each group (discarding the users friends)
-				$members = elgg_get_entities_from_relationship(array(
-					'type' => 'user',
-					'relationship' => 'member',
-					'relationship_guid' => $group->guid,
-					'inverse_relationship' => TRUE,
-					'wheres' => array(
-						"e.guid NOT IN ($in)",
-						"u.banned = 'no'"
-					),
-					'joins' => "INNER JOIN {$CONFIG->dbprefix}users_entity u USING (guid)",
-					'order_by' => 'u.last_action DESC',
-					'limit' => $groups_members_limit
-				));
-				if (is_array($members) && count($members) > 0) {
-					// populate $people
-					foreach ($members as $member) {
-						if (isset($people[$member->guid])) {
-							// if the current person is present in $people, increase the priority and attach the common group entity
-							$people[$member->guid]['groups'][] = $group;
-							++$people[$member->guid]['priority'];
-						} else {
-							$people[$member->guid] = array(
-								'entity' => $member,
-								'mutuals' => array(),
-								'groups' => array($group),
-								'priority' => 0
-							);
-						}
-					}
-				}
+		// get members of groups
+		$mog = elgg_get_entities($options);
+
+		foreach ($mog as $m) {
+			if (!isset($suggestions[$m->guid])) {
+				$priority = (int) $m->getVolatileData('select:priority');
+				$suggestions[$m->guid] = array(
+					'entity' => $m,
+					'mutuals' => 0,
+					'groups' => $priority,
+					'priority' => $priority
+				);
+			} else {
+				$priority = (int) $m->getVolatileData('select:priority');
+				$suggestions[$m->guid]['groups'] = $priority;
+				$suggestions[$m->guid]['priority'] += $priority;
 			}
 		}
-		unset($groups);
 	}
 
 	// sort by priority
-	usort($people, 'suggested_friends_sorter');
+	usort($suggestions, __NAMESPACE__ . '\\suggested_friends_sorter');
 
-	return $people;
-
+	return $suggestions;
 }

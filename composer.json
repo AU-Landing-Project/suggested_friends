@@ -1,0 +1,20 @@
+{
+    "name": "au/suggested_friends",
+    "type": "elgg-plugin",
+    "description": "This plugin will help the users to find people they may know (or should know), it can suggest friends of user's friends and/or members of user's groups",
+    "homepage": "https://github.com/AU-Landing-Project/suggested_friends",
+    "keywords": ["elgg", "plugin", "friends", "suggested friends", "AU"],
+    "license": "GPL-2.0",
+    "authors": [
+        {
+            "name": "Matt Beckett"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/AU-Landing-Project/suggested_friends/issues"
+    },
+    "require": {
+        "php": ">=5.4",
+        "composer/installers": ">=1.0.8"
+    }
+}

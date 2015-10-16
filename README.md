@@ -1,4 +1,4 @@
-Suggested-Friends-1.8.x
+Suggested Friends
 =======================
 
 Provides a page and a widget for suggesting friends based on mutual friends and group membership
